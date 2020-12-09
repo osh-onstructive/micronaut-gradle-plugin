@@ -1,7 +1,7 @@
 package io.micronaut.gradle.docker;
 
 import com.bmuschko.gradle.docker.tasks.image.Dockerfile;
-import io.micronaut.gradle.MicronautRuntime;
+import groovy.lang.Closure;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.Project;
 import org.gradle.api.model.ObjectFactory;
@@ -12,7 +12,6 @@ import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.internal.jvm.Jvm;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -31,6 +30,8 @@ public class MicronautDockerfile extends Dockerfile implements DockerBuildOption
     private final Property<DockerBuildStrategy> buildStrategy;
     @Input
     private final Property<String> defaultCommand;
+    @Input
+    private final ListProperty<String> dockerInstructions;
 
 
     public MicronautDockerfile() {
@@ -45,6 +46,7 @@ public class MicronautDockerfile extends Dockerfile implements DockerBuildOption
         this.args = objects.listProperty(String.class);
         this.exposedPorts = objects.listProperty(Integer.class)
                     .convention(Collections.singletonList(8080));
+        this.dockerInstructions = objects.listProperty(String.class);
 
         doLast(task -> {
             java.io.File f = getDestFile().get().getAsFile();
@@ -70,6 +72,7 @@ public class MicronautDockerfile extends Dockerfile implements DockerBuildOption
             case ORACLE_FUNCTION:
                 javaApplication.getMainClass().set("com.fnproject.fn.runtime.EntryPoint");
                 from(new Dockerfile.From(from != null ? from : "fnproject/fn-java-fdk:" + getProjectFnVersion()));
+                getDockerInstructions().get().forEach(this::instruction);
                 workingDir("/function");
                 copyFile("build/layers/libs/*.jar", "/function/app/");
                 copyFile("build/layers/resources/*", "/function/app/");
@@ -85,6 +88,7 @@ public class MicronautDockerfile extends Dockerfile implements DockerBuildOption
                 javaApplication.getMainClass().set("io.micronaut.function.aws.runtime.MicronautLambdaRuntime");
             default:
                 from(new Dockerfile.From(from != null ? from : "openjdk:15-alpine"));
+                getDockerInstructions().get().forEach(this::instruction);
                 setupResources(this);
                 exposePort(exposedPorts);
                 entryPoint(getArgs().map(strings -> {
@@ -122,8 +126,19 @@ public class MicronautDockerfile extends Dockerfile implements DockerBuildOption
     }
 
     @Override
+    public ListProperty<String> getDockerInstructions() {
+        return dockerInstructions;
+    }
+
+    @Override
     public DockerBuildOptions args(String... args) {
         this.args.addAll(args);
+        return this;
+    }
+
+    @Override
+    public DockerBuildOptions dockerCommands(String ... dockerInstructions) {
+        this.dockerInstructions.addAll(dockerInstructions);
         return this;
     }
 

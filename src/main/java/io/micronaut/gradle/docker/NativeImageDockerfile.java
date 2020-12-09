@@ -52,6 +52,8 @@ public class NativeImageDockerfile extends Dockerfile implements DockerBuildOpti
     private final Property<DockerBuildStrategy> buildStrategy;
     @Input
     private final Property<String> defaultCommand;
+    @Input
+    private final ListProperty<String> dockerInstructions;
 
 
     public NativeImageDockerfile() {
@@ -85,6 +87,7 @@ public class NativeImageDockerfile extends Dockerfile implements DockerBuildOpti
         this.args = objects.listProperty(String.class);
         this.exposedPorts = objects.listProperty(Integer.class);
         this.defaultCommand = objects.property(String.class).convention("none");
+        this.dockerInstructions = objects.listProperty(String.class);
         doLast(task -> {
             java.io.File f = getDestFile().get().getAsFile();
             System.out.println("Dockerfile written to: " + f.getAbsolutePath());
@@ -155,6 +158,11 @@ public class NativeImageDockerfile extends Dockerfile implements DockerBuildOpti
     }
 
     @Override
+    public ListProperty<String> getDockerInstructions() {
+        return dockerInstructions;
+    }
+
+    @Override
     @TaskAction
     public void create() {
         DockerBuildStrategy buildStrategy = this.buildStrategy.getOrElse(DockerBuildStrategy.DEFAULT);
@@ -222,6 +230,7 @@ public class NativeImageDockerfile extends Dockerfile implements DockerBuildOpti
                 from(baseImage);
                 workingDir("/function");
                 runCommand("groupadd -g 1000 fn && useradd --uid 1000 -g fn fn");
+                getDockerInstructions().get().forEach(this::instruction);
                 copyFile(new CopyFile("/home/app/application", "/function/func").withStage("graalvm"));
                 copyFile(new CopyFile("/function/runtime/lib/*", ".").withStage("fnfdk"));
                 entryPoint(args.map(strings -> {
@@ -244,6 +253,7 @@ public class NativeImageDockerfile extends Dockerfile implements DockerBuildOpti
                 from(baseImage);
                 workingDir("/function");
                 runCommand("yum install -y zip");
+                getDockerInstructions().get().forEach(this::instruction);
                 copyFile(new CopyFile("/home/app/application", "/function/func").withStage("builder"));
                 String funcCmd = String.join(" ", args.map(strings -> {
                     List<String> newList = new ArrayList<>(strings.size() + 1);
@@ -266,6 +276,7 @@ public class NativeImageDockerfile extends Dockerfile implements DockerBuildOpti
                 if (baseImage.contains("alpine-glibc")) {
                     runCommand("apk update && apk add libstdc++");
                 }
+                getDockerInstructions().get().forEach(this::instruction);
                 exposePort(this.exposedPorts);
                 copyFile(new CopyFile("/home/app/application", "/app/application").withStage("graalvm"));
                 entryPoint(args.map(strings -> {
@@ -301,6 +312,12 @@ public class NativeImageDockerfile extends Dockerfile implements DockerBuildOpti
     @Override
     public DockerBuildOptions exportPorts(Integer... ports) {
         this.exposedPorts.set(Arrays.asList(ports));
+        return this;
+    }
+
+    @Override
+    public DockerBuildOptions dockerCommands(String ... dockerInstructions) {
+        this.dockerInstructions.addAll(dockerInstructions);
         return this;
     }
 

@@ -37,12 +37,25 @@ public interface DockerBuildOptions {
     @Input
     ListProperty<Integer> getExposedPorts();
 
+    @Input
+    ListProperty<String> getDockerInstructions();
+
     /**
      * Arguments for the entrypoint.
      * @param args The arguments
      * @return This
      */
     DockerBuildOptions args(String... args);
+
+    /**
+     * Additional commands to add to the generated Dockerfile
+     *
+     * These are added directly after the 'FROM' in the generated Dockerfile
+     *
+     * @param dockerInstructions
+     * @return
+     */
+    DockerBuildOptions dockerCommands(String... dockerInstructions);
 
     /**
      * The base image to use.
